@@ -201,14 +201,14 @@ void MergeMapsKinematic::transformScan(LocalizedRangeScansIt iter,
   (*iter)->SetBoundingBox(bbox);
 
   // TRANSFORM UNFILTERED POINTS USED
-  karto::PointVectorDouble UPR_vec = (*iter)->GetPointReadings();
-  for(karto::PointVectorDouble::iterator it_upr = UPR_vec.begin();
+  karto::PointVectorDoubleWithIndex UPR_vec = (*iter)->GetPointReadings();
+  for(karto::PointVectorDoubleWithIndex::iterator it_upr = UPR_vec.begin();
     it_upr != UPR_vec.end(); ++it_upr)
   {
     const karto::Vector2<kt_double> upr_corr = applyCorrection(
-      *it_upr, submap_correction);
-    it_upr->SetX(upr_corr.GetX());
-    it_upr->SetY(upr_corr.GetY());
+      it_upr->second, submap_correction);
+    it_upr->second.SetX(upr_corr.GetX());
+    it_upr->second.SetY(upr_corr.GetY());
   }
   (*iter)->SetPointReadings(UPR_vec);
 

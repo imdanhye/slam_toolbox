@@ -1099,12 +1099,12 @@ namespace karto
    */
   void ScanMatcher::AddScan(LocalizedRangeScan* pScan, const Vector2<kt_double>& rViewPoint, kt_bool doSmear)
   {
-    PointVectorDouble validPoints = FindValidPoints(pScan, rViewPoint);
+    PointVectorDoubleWithIndex validPoints = FindValidPoints(pScan, rViewPoint);
 
     // put in all valid points
-    const_forEach(PointVectorDouble, &validPoints)
+    const_forEach(PointVectorDoubleWithIndex, &validPoints)
     {
-      Vector2<kt_int32s> gridPoint = m_pCorrelationGrid->WorldToGrid(*iter);
+      Vector2<kt_int32s> gridPoint = m_pCorrelationGrid->WorldToGrid(iter->second);
       if (!math::IsUpTo(gridPoint.GetX(), m_pCorrelationGrid->GetROI().GetWidth()) ||
           !math::IsUpTo(gridPoint.GetY(), m_pCorrelationGrid->GetROI().GetHeight()))
       {
@@ -1137,23 +1137,23 @@ namespace karto
    * @param rViewPoint
    * @return points on the same side
    */
-  PointVectorDouble ScanMatcher::FindValidPoints(LocalizedRangeScan* pScan, const Vector2<kt_double>& rViewPoint) const
+  PointVectorDoubleWithIndex ScanMatcher::FindValidPoints(LocalizedRangeScan* pScan, const Vector2<kt_double>& rViewPoint) const
   {
-    const PointVectorDouble& rPointReadings = pScan->GetPointReadings();
+    const PointVectorDoubleWithIndex& rPointReadings = pScan->GetPointReadings();
 
     // points must be at least 10 cm away when making comparisons of inside/outside of viewpoint
     const kt_double minSquareDistance = math::Square(0.1);  // in m^2
 
     // this iterator lags from the main iterator adding points only when the points are on
     // the same side as the viewpoint
-    PointVectorDouble::const_iterator trailingPointIter = rPointReadings.begin();
-    PointVectorDouble validPoints;
+    PointVectorDoubleWithIndex::const_iterator trailingPointIter = rPointReadings.begin();
+    PointVectorDoubleWithIndex validPoints;
 
     Vector2<kt_double> firstPoint;
     kt_bool firstTime = true;
-    const_forEach(PointVectorDouble, &rPointReadings)
+    const_forEach(PointVectorDoubleWithIndex, &rPointReadings)
     {
-      Vector2<kt_double> currentPoint = *iter;
+      Vector2<kt_double> currentPoint = iter->second;
 
       if (firstTime && !std::isnan(currentPoint.GetX()) && !std::isnan(currentPoint.GetY()))
       {

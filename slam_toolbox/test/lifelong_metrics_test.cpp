@@ -47,9 +47,9 @@ TEST(LifelingMetricsTests, TestBounds)
   bb2.SetMaximum(Vector2<kt_double>(5.0, 7.0));
   s1->SetBoundingBox(bb1);
   s2->SetBoundingBox(bb2);
-  PointVectorDouble pts;
-  pts.push_back(Vector2<double>(3.0, 5.0)); //inside
-  pts.push_back(Vector2<double>(3.0, 3.0)); //outside
+  PointVectorDoubleWithIndex pts;
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 5.0))); //inside
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 3.0))); //outside
   s2->SetPointReadings(pts, true);
   double x_l, x_u, y_l, y_u;
   bool dirty = false;
@@ -79,9 +79,9 @@ TEST(LifelingMetricsTests, TestIntersect)
   bb2.SetMaximum(Vector2<kt_double>(5.0, 7.0));
   s1->SetBoundingBox(bb1);
   s2->SetBoundingBox(bb2);
-  PointVectorDouble pts;
-  pts.push_back(Vector2<double>(3.0, 5.0)); //inside
-  pts.push_back(Vector2<double>(3.0, 3.0)); //outside
+  PointVectorDoubleWithIndex pts;
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 5.0))); //inside
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 3.0))); //outside
   s2->SetPointReadings(pts, true);
   bool dirty = false;
   s1->SetIsDirty(dirty);
@@ -107,9 +107,9 @@ TEST(LifelingMetricsTests, TestIntersectOverUnion)
   bb2.SetMaximum(Vector2<kt_double>(5.0, 7.0));
   s1->SetBoundingBox(bb1);
   s2->SetBoundingBox(bb2);
-  PointVectorDouble pts;
-  pts.push_back(Vector2<double>(3.0, 5.0)); //inside
-  pts.push_back(Vector2<double>(3.0, 3.0)); //outside
+  PointVectorDoubleWithIndex pts;
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 5.0))); //inside
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 3.0))); //outside
   s2->SetPointReadings(pts, true);
   bool dirty = false;
   s1->SetIsDirty(dirty);
@@ -135,9 +135,9 @@ TEST(LifelingMetricsTests, TestAreaOverlap)
   bb2.SetMaximum(Vector2<kt_double>(5.0, 7.0));
   s1->SetBoundingBox(bb1);
   s2->SetBoundingBox(bb2);
-  PointVectorDouble pts;
-  pts.push_back(Vector2<double>(3.0, 5.0)); //inside
-  pts.push_back(Vector2<double>(3.0, 3.0)); //outside
+  PointVectorDoubleWithIndex pts;
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 5.0))); //inside
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 3.0))); //outside
   s2->SetPointReadings(pts, true);
   bool dirty = false;
   s1->SetIsDirty(dirty);
@@ -163,9 +163,9 @@ TEST(LifelingMetricsTests, TestPtOverlap)
   bb2.SetMaximum(Vector2<kt_double>(5.0, 7.0));
   s1->SetBoundingBox(bb1);
   s2->SetBoundingBox(bb2);
-  PointVectorDouble pts;
-  pts.push_back(Vector2<double>(3.0, 5.0)); //inside
-  pts.push_back(Vector2<double>(3.0, 3.0)); //outside
+  PointVectorDoubleWithIndex pts;
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 5.0))); //inside
+  pts.push_back(std::pair<int, Vector2<kt_double>>(0, Vector2<double>(3.0, 3.0))); //outside
   s2->SetPointReadings(pts, true);
   bool dirty = false;
   s1->SetIsDirty(dirty);

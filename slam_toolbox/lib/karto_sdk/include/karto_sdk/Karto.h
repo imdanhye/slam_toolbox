@@ -1279,6 +1279,7 @@ namespace karto
    * Type declaration of Vector2<kt_double> vector
    */
   typedef std::vector< Vector2<kt_double> > PointVectorDouble;
+  typedef std::vector< std::pair<int, Vector2<kt_double>> > PointVectorDoubleWithIndex;
 
   ////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////
@@ -4170,7 +4171,7 @@ namespace karto
      * @param ignoreThresholdPoints
      * @param flipY
      */
-    const PointVectorDouble GetPointReadings(LocalizedRangeScan* pLocalizedRangeScan,
+    const PointVectorDoubleWithIndex GetPointReadings(LocalizedRangeScan* pLocalizedRangeScan,
                                             CoordinateConverter* pCoordinateConverter,
                                             kt_bool ignoreThresholdPoints = true,
                                             kt_bool flipY = false) const;
@@ -5705,7 +5706,7 @@ namespace karto
     /**
      * Get point readings in local coordinates
      */
-    inline const PointVectorDouble& GetPointReadings(kt_bool wantFiltered = false) const
+    inline const PointVectorDoubleWithIndex& GetPointReadings(kt_bool wantFiltered = false) const
     {
       boost::shared_lock<boost::shared_mutex> lock(m_Lock);
       if (m_IsDirty)
@@ -5726,7 +5727,7 @@ namespace karto
       }
     }
 
-    inline void SetPointReadings(PointVectorDouble& points, kt_bool setFiltered = false)
+    inline void SetPointReadings(PointVectorDoubleWithIndex& points, kt_bool setFiltered = false)
     {
       if (setFiltered)
       {
@@ -5771,7 +5772,7 @@ namespace karto
             point.SetX(scanPose.GetX() + (rangeReading * cos(angle)));
             point.SetY(scanPose.GetY() + (rangeReading * sin(angle)));
 
-            m_UnfilteredPointReadings.push_back(point);
+            m_UnfilteredPointReadings.push_back(std::pair<int, Vector2<kt_double>>(i, point));
             continue;
           }
 
@@ -5781,8 +5782,10 @@ namespace karto
           point.SetX(scanPose.GetX() + (rangeReading * cos(angle)));
           point.SetY(scanPose.GetY() + (rangeReading * sin(angle)));
 
-          m_PointReadings.push_back(point);
-          m_UnfilteredPointReadings.push_back(point);
+          m_PointReadings.push_back(std::pair<int, Vector2<kt_double>>(i, point));
+          m_UnfilteredPointReadings.push_back(std::pair<int, Vector2<kt_double>>(i, point));
+
+
 
           rangePointsSum += point;
         }
@@ -5802,9 +5805,9 @@ namespace karto
         // calculate bounding box of scan
         m_BoundingBox = BoundingBox2();
         m_BoundingBox.Add(scanPose.GetPosition());
-        forEach(PointVectorDouble, &m_PointReadings)
+        forEach(PointVectorDoubleWithIndex, &m_PointReadings)
         {
-          m_BoundingBox.Add(*iter);
+          m_BoundingBox.Add(iter->second);
         }
       }
 
@@ -5853,12 +5856,12 @@ namespace karto
     /**
      * Vector of point readings
      */
-    PointVectorDouble m_PointReadings;
+    PointVectorDoubleWithIndex m_PointReadings;
 
     /**
      * Vector of unfiltered point readings
      */
-    PointVectorDouble m_UnfilteredPointReadings;
+    PointVectorDoubleWithIndex m_UnfilteredPointReadings;
 
     /**
      * Bounding box of localized range scan
@@ -5929,7 +5932,7 @@ namespace karto
         if (!std::isfinite(m_Points[i].GetX()) || !std::isfinite(m_Points[i].GetY()))
         {
           Vector2<kt_double> point(m_Points[i].GetX(), m_Points[i].GetY());
-          m_UnfilteredPointReadings.push_back(point);
+          m_UnfilteredPointReadings.push_back(std::pair<int, Vector2<kt_double>>(i, point));
 
           continue;
         }
@@ -5939,8 +5942,8 @@ namespace karto
         Pose2 result = Transform(robotPose).TransformPose(pointPose);
         Vector2<kt_double> point(result.GetX(), result.GetY());
 
-        m_PointReadings.push_back(point);
-        m_UnfilteredPointReadings.push_back(point);
+        m_PointReadings.push_back(std::pair<int, Vector2<kt_double>>(i, point));
+        m_UnfilteredPointReadings.push_back(std::pair<int, Vector2<kt_double>>(i, point));
 
         rangePointsSum += point;
       }
@@ -5960,9 +5963,9 @@ namespace karto
       // calculate bounding box of scan
       m_BoundingBox = BoundingBox2();
       m_BoundingBox.Add(scanPose.GetPosition());
-      forEach(PointVectorDouble, &m_PointReadings)
+      forEach(PointVectorDoubleWithIndex, &m_PointReadings)
       {
-        m_BoundingBox.Add(*iter);
+        m_BoundingBox.Add(iter->second);
       }
 
       m_IsDirty = false;
@@ -6269,15 +6272,15 @@ namespace karto
 
       Vector2<kt_double> scanPosition = pScan->GetSensorPose().GetPosition();
       // get scan point readings
-      const PointVectorDouble& rPointReadings = pScan->GetPointReadings(false);
+      const PointVectorDoubleWithIndex& rPointReadings = pScan->GetPointReadings(false);
 
       kt_bool isAllInMap = true;
 
       // draw lines from scan position to all point readings
       int pointIndex = 0;
-      const_forEachAs(PointVectorDouble, &rPointReadings, pointsIter)
+      const_forEachAs(PointVectorDoubleWithIndex, &rPointReadings, pointsIter)
       {
-        Vector2<kt_double> point = *pointsIter;
+        Vector2<kt_double> point = pointsIter->second;
         kt_double rangeReading = pScan->GetRangeReadings()[pointIndex];
         kt_bool isEndPointValid = rangeReading < (rangeThreshold - KT_TOLERANCE);
 
@@ -6954,16 +6957,16 @@ namespace karto
 				  //////////////////////////////////////////////////////
 				  // convert points into local coordinates of scan pose
 
-				  const PointVectorDouble& rPointReadings = pScan->GetPointReadings();
+				  const PointVectorDoubleWithIndex& rPointReadings = pScan->GetPointReadings();
 
 				  // compute transform to scan pose
 				  Transform transform(pScan->GetSensorPose());
 
 				  Pose2Vector localPoints;
-				  const_forEach(PointVectorDouble, &rPointReadings)
+				  const_forEach(PointVectorDoubleWithIndex, &rPointReadings)
 				  {
 					  // do inverse transform to get points in local coordinates
-					  Pose2 vec = transform.InverseTransformPose(Pose2(*iter, 0.0));
+					  Pose2 vec = transform.InverseTransformPose(Pose2(iter->second, 0.0));
 					  localPoints.push_back(vec);
 				  }
 

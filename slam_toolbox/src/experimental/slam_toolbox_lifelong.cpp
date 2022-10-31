@@ -420,19 +420,19 @@ double LifelongSlamToolbox::computeReadingOverlapRatio(
   LocalizedRangeScan* candidate_scan)
 /*****************************************************************************/
 {
-  const PointVectorDouble& pts = candidate_scan->GetPointReadings(true);
+  const PointVectorDoubleWithIndex& pts = candidate_scan->GetPointReadings(true);
   const int num_pts = pts.size();
 
   // get the bounds of the intersect area
   double x_l, x_u, y_l, y_u;
   computeIntersectBounds(ref_scan, candidate_scan, x_l, x_u, y_l, y_u);
 
-  PointVectorDouble::const_iterator pt_it;
+  PointVectorDoubleWithIndex::const_iterator pt_it;
   int inner_pts = 0;
   for (pt_it = pts.begin(); pt_it != pts.end(); ++pt_it)
   {
-    if (pt_it->GetX() < x_u && pt_it->GetX() > x_l &&
-        pt_it->GetY() < y_u && pt_it->GetY() > y_l)
+    if (pt_it->second.GetX() < x_u && pt_it->second.GetX() > x_l &&
+        pt_it->second.GetY() < y_u && pt_it->second.GetY() > y_l)
     {
       inner_pts++;
     }

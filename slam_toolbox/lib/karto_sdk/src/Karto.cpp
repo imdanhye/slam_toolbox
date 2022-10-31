@@ -161,12 +161,12 @@ namespace karto
   ////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////
 
-  const PointVectorDouble LaserRangeFinder::GetPointReadings(LocalizedRangeScan* pLocalizedRangeScan,
+  const PointVectorDoubleWithIndex LaserRangeFinder::GetPointReadings(LocalizedRangeScan* pLocalizedRangeScan,
                                                              CoordinateConverter* pCoordinateConverter,
                                                              kt_bool ignoreThresholdPoints,
                                                              kt_bool flipY) const
   {
-    PointVectorDouble pointReadings;
+    PointVectorDoubleWithIndex pointReadings;
 
     Pose2 scanPose = pLocalizedRangeScan->GetSensorPose();
 
@@ -203,7 +203,7 @@ namespace karto
         point.SetY(gridPoint.GetY());
       }
 
-      pointReadings.push_back(point);
+      pointReadings.push_back(std::pair<int, Vector2<kt_double>>(i, point));
     }
 
     return pointReadings;

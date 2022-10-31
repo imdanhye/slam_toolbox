@@ -1446,7 +1446,7 @@ namespace karto
      * @param rViewPoint
      * @return points on the same side
      */
-    PointVectorDouble FindValidPoints(LocalizedRangeScan* pScan, const Vector2<kt_double>& rViewPoint) const;
+    PointVectorDoubleWithIndex FindValidPoints(LocalizedRangeScan* pScan, const Vector2<kt_double>& rViewPoint) const;
 
     /**
      * Get response at given position for given rotation (only look up valid points)
