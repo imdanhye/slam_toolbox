@@ -1057,6 +1057,7 @@ namespace karto
   void ScanMatcher::AddScans(const LocalizedRangeScanVector& rScans, Vector2<kt_double> viewPoint)
   {
     m_pCorrelationGrid->Clear();
+    m_OccupiedGridPoint.clear();
 
     // add all scans to grid
     const_forEach(LocalizedRangeScanVector, &rScans)
@@ -1120,7 +1121,8 @@ namespace karto
         // value already set
         continue;
       }
-
+      
+      m_OccupiedGridPoint.push_back(gridPoint);
       m_pCorrelationGrid->GetDataPointer()[gridIndex] = GridStates_Occupied;
 
       // smear grid

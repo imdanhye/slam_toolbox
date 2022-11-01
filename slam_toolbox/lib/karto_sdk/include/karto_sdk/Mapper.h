@@ -1483,6 +1483,7 @@ namespace karto
     kt_int32u m_nAngles;
     kt_double m_searchAngleResolution;
     kt_bool m_doPenalize;
+    std::vector< Vector2<kt_int32s> > m_OccupiedGridPoint;
 
     /**
      * Serialization: class ScanMatcher
