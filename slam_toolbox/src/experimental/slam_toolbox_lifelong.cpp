@@ -35,6 +35,7 @@ void LifelongSlamToolbox::checkIsNotNormalized(const double& value)
 /*****************************************************************************/
 LifelongSlamToolbox::LifelongSlamToolbox(ros::NodeHandle& nh)
 : SlamToolbox(nh)
+  ,last_scan_(NULL)
 /*****************************************************************************/
 {
   loadPoseGraphByParams(nh);
@@ -91,7 +92,181 @@ void LifelongSlamToolbox::laserCallback(
   // LTS if (eval() && dont_add_more_scans) {addScan()} else {localization_add_scan()}
   // LTS if (eval() && ctr / total < add_rate_scans) {addScan()} else {localization_add_scan()}
   karto::LocalizedRangeScan* range_scan = addScan(laser, scan, pose);
-  evaluateNodeDepreciation(range_scan);
+
+  if(!range_scan)
+  {
+    return;
+  }
+
+  if(last_scan_ != NULL)
+  {
+    try
+    {
+      removeInvalidPointReadings(range_scan, last_scan_);
+    }
+    catch (std::exception &e)
+    {
+      ROS_WARN("%s",e.what());
+    }
+  }
+
+  last_scan_ = smapper_->getMapper()->GetMapperSensorManager()->GetLastScan(range_scan->GetSensorName());
+  
+  //evaluateNodeDepreciation(range_scan);
+  return;
+}
+
+/*****************************************************************************/
+void LifelongSlamToolbox::removeInvalidPointReadings(
+  LocalizedRangeScan* range_scan,
+  LocalizedRangeScan* last_scan)
+/*****************************************************************************/
+{
+  boost::mutex::scoped_lock lock(smapper_mutex_);
+  karto::Mapper* mapper = smapper_->getMapper();
+
+  if(!mapper->HasMovedEnough(range_scan, last_scan))
+  {
+    return;
+  }
+
+  // Find near vertices
+  std::vector<karto::Vertex<karto::LocalizedRangeScan>*> near_linked_vertices;
+  near_linked_vertices = mapper->GetGraph()->FindNearLinkedVertices(range_scan,
+                                                                    mapper->getParamLoopSearchMaximumDistance());
+
+  // Convert vertices to scan
+  std::vector<karto::LocalizedRangeScan*> near_linked_scan;
+  for (int vertex_idx = 0; vertex_idx < near_linked_vertices.size(); vertex_idx++)
+  {
+    near_linked_scan.push_back(near_linked_vertices[vertex_idx]->GetObject());
+  }
+
+  // Get removed grid point
+  PointVectorDoubleWithIndex removed_grid_point = findRemovedGridPoint(range_scan, near_linked_scan);
+
+  for (int vertex_idx = 0; vertex_idx < near_linked_vertices.size(); vertex_idx++)
+  {
+    removeReadings(near_linked_vertices[vertex_idx], removed_grid_point);   
+    updateScansFromSlamGraph(near_linked_vertices[vertex_idx]);
+  }
+
+  return;
+}
+
+/*****************************************************************************/
+PointVectorDoubleWithIndex LifelongSlamToolbox::findRemovedGridPoint(
+  LocalizedRangeScan* range_scan,
+  std::vector<karto::LocalizedRangeScan*> near_linked_scan)
+/*****************************************************************************/
+{
+  karto::Mapper* mapper = smapper_->getMapper();
+ 
+  Pose2 best_pose;
+  Matrix3 covariance;
+  covariance.SetToIdentity();
+
+  kt_double response = mapper->GetSequentialScanMatcher()->MatchScan(range_scan, 
+                                                                      near_linked_scan,
+                                                                      best_pose, covariance, false,false); 
+
+  PointVectorDoubleWithIndex occupied_grid_point;
+  occupied_grid_point = mapper->GetSequentialScanMatcher()->GetOccupiedGridPoint();
+
+  PointVectorDoubleWithIndex point_readings = range_scan->GetPointReadings();
+
+  PointVectorDoubleWithIndex removed_grid_point;
+
+  // Update sensor pose & point readings
+  range_scan->SetSensorPose(best_pose);
+  range_scan->UpdateReadings();
+
+  // Find removed grid point
+  for (int occupied_idx = 0; occupied_idx<occupied_grid_point.size(); occupied_idx++)
+  {
+    Vector2<kt_double> point_value = occupied_grid_point[occupied_idx].second;
+    int occupied_iter_num = checkValueExist(point_readings, point_value);
+
+    if(occupied_iter_num == -1)
+    {
+      removed_grid_point.push_back(occupied_grid_point[occupied_idx]);
+    }
+  }
+
+  return removed_grid_point;
+}
+
+/*****************************************************************************/
+int LifelongSlamToolbox::checkValueExist(
+  PointVectorDoubleWithIndex point_vector, 
+  Vector2<kt_double> value)
+/*****************************************************************************/
+{
+  auto iter = std::find_if(point_vector.begin(), point_vector.end(),
+                                                            [&value](const std::pair<int,Vector2<kt_double>> &point_vector){
+
+                                                              kt_double diff_x = std::abs(point_vector.second.GetX() - value.GetX());
+                                                              kt_double diff_y = std::abs(point_vector.second.GetY() - value.GetY());
+
+                                                              if (diff_x < 0.1 && diff_y < 0.1)
+                                                              {
+                                                                return true;
+                                                              }
+                                                              else
+                                                              {
+                                                                return false;
+                                                              }
+
+                                                            });
+  if (iter == point_vector.end())
+  {
+    return -1;
+  }
+  else
+  {
+    return iter - point_vector.begin();
+  }
+}
+
+/*****************************************************************************/
+void LifelongSlamToolbox::removeReadings(
+  Vertex<LocalizedRangeScan>* vertex,
+  PointVectorDoubleWithIndex removed_grid_point)
+/*****************************************************************************/
+{
+  // Set removed point to -1 [m]
+  PointVectorDoubleWithIndex vertex_point_readings = vertex->GetObject()->GetPointReadings();
+
+  kt_double* range_readings = vertex->GetObject()->GetRangeReadings();
+  int num_range_readings = vertex->GetObject()->GetNumberOfRangeReadings();
+
+  for (int removed_idx = 0; removed_idx < removed_grid_point.size(); removed_idx++)
+  {
+    int reading_iter_num = checkValueExist(vertex_point_readings, removed_grid_point[removed_idx].second);
+    if (reading_iter_num != -1) // if exist
+    {
+      range_readings[vertex_point_readings[reading_iter_num].first] = -1;
+    }
+  }
+
+  // Update readings
+  vertex->GetObject()->SetRangeReadings(RangeReadingsVector(range_readings,
+                                                            range_readings + num_range_readings));
+  vertex->GetObject()->UpdateReadings();
+
+  return;
+}
+
+/*****************************************************************************/
+void LifelongSlamToolbox::updateScansFromSlamGraph(
+  Vertex<LocalizedRangeScan>* vertex)
+/*****************************************************************************/
+{
+  smapper_->getMapper()->GetMapperSensorManager()->EditScan(vertex->GetObject());
+  smapper_->getMapper()->GetMapperSensorManager()->EditRunningScans(vertex->GetObject());
+  dataset_->EditData(vertex->GetObject());
+  smapper_->getMapper()->GetGraph()->EditVertex(vertex->GetObject()->GetSensorName(), vertex);
+
   return;
 }
 
