@@ -143,6 +143,18 @@ namespace karto
     }
 
     /**
+     * Edit running scans of device to given scan
+     */
+    void EditRunningScans(LocalizedRangeScan* pScan)
+    {
+      for(int i=0; i<m_RunningScans.size(); i++)
+      {
+        if (m_RunningScans[i]->GetUniqueId() == pScan->GetUniqueId())
+          m_RunningScans[i] = pScan;
+      } 
+    }
+
+    /**
      * Gets running scan buffer size
      * @return running scan buffer size
      */
@@ -211,6 +223,23 @@ namespace karto
       else
       {
         std::cout << "Remove Scan: Failed to find scan in m_Scans" << std::endl;
+      }
+    }
+
+    /**
+     * Finds and replaces a scan from m_scans with given scan
+     * @param pScan
+     */
+    void EditScan(LocalizedRangeScan* pScan)
+    {
+      LocalizedRangeScanMap::iterator it = m_Scans.find(pScan->GetUniqueId());
+      if (it!= m_Scans.end())
+      {
+        it->second = pScan;
+      }
+      else
+      {
+        std::cout << "EditScan: Failed to find scan in m_Scans" << std::endl;
       }
     }
 
@@ -298,7 +327,7 @@ namespace karto
    * @param pLaserRangeFinder
    * @return last localized range scan of device
    */
-  inline LocalizedRangeScan* MapperSensorManager::GetLastScan(const Name& rSensorName)
+  LocalizedRangeScan* MapperSensorManager::GetLastScan(const Name& rSensorName)
   {
     RegisterSensor(rSensorName);
 
@@ -372,6 +401,21 @@ namespace karto
     }
   }
 
+  void MapperSensorManager::EditScan(LocalizedRangeScan* pScan)
+  {
+    GetScanManager(pScan)->EditScan(pScan);
+
+    LocalizedRangeScanMap::iterator it = m_Scans.find(pScan->GetUniqueId());
+    if (it!= m_Scans.end())
+    {
+      it->second = pScan;
+    }
+    else
+    {
+      std::cout << "EditScan: Failed to find scan in m_Scans" << std::endl;
+    }
+  }
+  
   /**
    * Gets scans of device
    * @param rSensorName
@@ -398,6 +442,12 @@ namespace karto
     return;
   }
 
+  void MapperSensorManager::EditRunningScans(LocalizedRangeScan* pScan)
+  {
+    GetScanManager(pScan)->EditRunningScans(pScan);
+    return;    
+  }
+  
   inline kt_int32u MapperSensorManager::GetRunningScanBufferSize(const Name& rSensorName)
   {
     return GetScanManager(rSensorName)->GetRunningScanBufferSize();
@@ -1122,7 +1172,7 @@ namespace karto
         continue;
       }
       
-      m_OccupiedGridPoint.push_back(gridPoint);
+      m_OccupiedGridPoint.push_back(std::pair<int,Vector2<kt_double>>(iter->first, iter->second));
       m_pCorrelationGrid->GetDataPointer()[gridIndex] = GridStates_Occupied;
 
       // smear grid
@@ -1240,7 +1290,6 @@ namespace karto
 
     return response;
   }
-
 
   ////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////

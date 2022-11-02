@@ -614,6 +614,25 @@ namespace karto
     }
 
     /**
+     * Edit to a given vertex into the map using the given name
+     * @param rName
+     * @param pVertex
+     */
+    inline void EditVertex(const Name& rName, Vertex<T>* pVertex)
+    {
+      std::map<int, Vertex<LocalizedRangeScan>* >::iterator it = m_Vertices[rName].find(pVertex->GetObject()->GetStateId());
+      if (it != m_Vertices[rName].end())
+      {
+        it->second = pVertex;
+      }
+      else
+      {
+        std::cout << "EditVertex: Failed to remove vertex " << pVertex->GetObject()->GetStateId() 
+          << " because it doesnt exist in m_Vertices." << std::endl;
+      }      
+    }
+
+    /**
      * Adds an edge to the graph
      * @param pEdge
      */
@@ -1423,6 +1442,11 @@ namespace karto
       return m_pCorrelationGrid;
     }
 
+    inline PointVectorDoubleWithIndex GetOccupiedGridPoint() const
+    {
+      return m_OccupiedGridPoint;
+    }
+    
   private:
     /**
      * Marks cells where scans' points hit as being occupied
@@ -1483,7 +1507,7 @@ namespace karto
     kt_int32u m_nAngles;
     kt_double m_searchAngleResolution;
     kt_bool m_doPenalize;
-    std::vector< Vector2<kt_int32s> > m_OccupiedGridPoint;
+    PointVectorDoubleWithIndex m_OccupiedGridPoint;
 
     /**
      * Serialization: class ScanMatcher
@@ -1657,6 +1681,12 @@ namespace karto
     void RemoveScan(LocalizedRangeScan* pScan);
 
     /**
+     * Finds and replaces a scan from m_scans with given scan
+     * @param pScan
+     */
+    void EditScan(LocalizedRangeScan* pScan);
+
+    /**
      * Gets scans of device
      * @param rSensorName
      * @return scans of device
@@ -1675,6 +1705,11 @@ namespace karto
      */
     void ClearRunningScans(const Name& rSensorName);
 
+    /**
+     * Edit running scans of device to given scan
+     */
+
+    void EditRunningScans(LocalizedRangeScan* pScan);
     /**
      * Gets the running scan buffer of device
      */
@@ -2083,7 +2118,6 @@ namespace karto
      * @return true if the scan is "sufficiently far" from the last scan added or
      * the scan is the first scan to be added
      */
-    kt_bool HasMovedEnough(LocalizedRangeScan* pScan, LocalizedRangeScan* pLastScan) const;
 
   public:
     /////////////////////////////////////////////
@@ -2124,6 +2158,9 @@ namespace karto
     // FireCovarianceCalculated
 
     // FireLoopClosureChain
+
+    kt_bool HasMovedEnough(LocalizedRangeScan* pScan, LocalizedRangeScan* pLastScan) const;
+
 
   private:
     /**

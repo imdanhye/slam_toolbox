@@ -5739,6 +5739,18 @@ namespace karto
       }
     }
 
+    void UpdateReadings()
+    {
+      boost::shared_lock<boost::shared_mutex> lock(m_Lock);
+
+      bool is_dirty = true;
+      SetIsDirty(is_dirty);
+
+      lock.unlock();
+      boost::unique_lock<boost::shared_mutex> uniqueLock(m_Lock);
+      const_cast<LocalizedRangeScan*>(this)->Update();      
+    }
+
   private:
     /**
      * Compute point readings based on range readings
@@ -6664,6 +6676,24 @@ namespace karto
       }
     }
 
+    /**
+     * Remove data to given scan
+     * @param index to edit
+     */
+    inline void EditData(LocalizedRangeScan* scan)
+    {
+      auto iterator = m_Data.find(scan->GetUniqueId());
+      if (iterator != m_Data.end())
+      {
+        iterator->second = scan;
+      }
+      else
+      {
+        std::cout << "Failed to edit data. Pointer to LocalizedRangeScan could not be found in dataset. "
+          << "Most likely different pointer address but same object TODO STEVE." << std::endl;
+      }      
+    }
+    
     /**
      * Get dataset info
      * @return dataset info
