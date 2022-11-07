@@ -41,6 +41,21 @@ public:
   static void computeIntersectBounds(LocalizedRangeScan* s1, LocalizedRangeScan* s2, double& x_l, double& x_u, double& y_l, double& y_u);
 
 protected:
+
+  struct CheckIsExist
+  {
+    CheckIsExist(Vector2<kt_double> value, double radius) : value_(value),radius_(radius) {}
+      
+    bool operator()(const std::pair<int,Vector2<kt_double>> &point_with_index) const
+    {
+      Vector2<kt_double> delta = point_with_index.second - value_;
+      return ( delta.Length()<= radius_);
+    }
+    private:
+      Vector2<kt_double> value_;
+      double radius_;
+  };
+
   virtual void laserCallback(
     const sensor_msgs::LaserScan::ConstPtr& scan) override final;
   virtual bool deserializePoseGraphCallback(
@@ -49,7 +64,6 @@ protected:
 
   void removeInvalidPointReadings(LocalizedRangeScan* range_scan, LocalizedRangeScan* last_scan);
   PointVectorDoubleWithIndex findRemovedGridPoint(LocalizedRangeScan* range_scan, std::vector<karto::LocalizedRangeScan*> near_linked_scan);
-  int checkValueExist(PointVectorDoubleWithIndex point_vector, Vector2<kt_double> value);
   void removeReadings(Vertex<LocalizedRangeScan>* vertex, PointVectorDoubleWithIndex removed_grid_point);
   void updateScansFromSlamGraph(Vertex<LocalizedRangeScan>* vertex);
 
@@ -71,6 +85,13 @@ protected:
   double nearby_penalty_;
 
   LocalizedRangeScan* last_scan_;
+  karto::Mapper* mapper_;
+  ScanMatcher* lifelong_scan_matcher_;
+
+  bool partial_remove_;
+  double search_max_distance_;
+  double scan_match_max_range_;
+  double match_radius_;
 };
 
 }

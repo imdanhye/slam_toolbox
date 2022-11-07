@@ -25,7 +25,7 @@ namespace slam_toolbox
 void LifelongSlamToolbox::checkIsNotNormalized(const double& value)
 /*****************************************************************************/
 {
-  if (value < 0.0 || value > 1.0)
+  if(value < 0.0 || value > 1.0)
   {
     ROS_FATAL("All stores and scales must be in range [0, 1].");
     exit(-1);
@@ -34,11 +34,16 @@ void LifelongSlamToolbox::checkIsNotNormalized(const double& value)
 
 /*****************************************************************************/
 LifelongSlamToolbox::LifelongSlamToolbox(ros::NodeHandle& nh)
-: SlamToolbox(nh)
-  ,last_scan_(NULL)
+: SlamToolbox(nh),
+  last_scan_(NULL),
+  lifelong_scan_matcher_(NULL)
 /*****************************************************************************/
 {
   loadPoseGraphByParams(nh);
+  nh.param("lifelong_partial_remove", partial_remove_, true);
+  nh.param("lifelong_search_maximum_distance", search_max_distance_,20.0);
+  nh.param("lifelong_scan_match_maximum_range",scan_match_max_range_, 10.0);
+  nh.param("lifelong_match_radius", match_radius_, 0.1);
   nh.param("lifelong_search_use_tree", use_tree_, false);
   nh.param("lifelong_minimum_score", iou_thresh_, 0.10);
   nh.param("lifelong_iou_match", iou_match_, 0.85);
@@ -89,30 +94,26 @@ void LifelongSlamToolbox::laserCallback(
 
   // LTS additional bounded node increase parameter (rate, or total for run or at all?)
   // LTS pseudo-localization mode. If want to add a scan, but not deleting a scan, add to local buffer?
-  // LTS if (eval() && dont_add_more_scans) {addScan()} else {localization_add_scan()}
-  // LTS if (eval() && ctr / total < add_rate_scans) {addScan()} else {localization_add_scan()}
+  // LTS if(eval() && dont_add_more_scans) {addScan()} else {localization_add_scan()}
+  // LTS if(eval() && ctr / total < add_rate_scans) {addScan()} else {localization_add_scan()}
   karto::LocalizedRangeScan* range_scan = addScan(laser, scan, pose);
 
-  if(!range_scan)
+  // process to remove old vertex or scan points
+  if(range_scan)
   {
-    return;
-  }
-
-  if(last_scan_ != NULL)
-  {
-    try
+    mapper_ = smapper_->getMapper();
+   
+    if(partial_remove_)
     {
       removeInvalidPointReadings(range_scan, last_scan_);
+      last_scan_ = mapper_->GetMapperSensorManager()->GetLastScan(range_scan->GetSensorName());      
     }
-    catch (std::exception &e)
+    else
     {
-      ROS_WARN("%s",e.what());
+      evaluateNodeDepreciation(range_scan);
     }
   }
 
-  last_scan_ = smapper_->getMapper()->GetMapperSensorManager()->GetLastScan(range_scan->GetSensorName());
-  
-  //evaluateNodeDepreciation(range_scan);
   return;
 }
 
@@ -123,17 +124,20 @@ void LifelongSlamToolbox::removeInvalidPointReadings(
 /*****************************************************************************/
 {
   boost::mutex::scoped_lock lock(smapper_mutex_);
-  karto::Mapper* mapper = smapper_->getMapper();
 
-  if(!mapper->HasMovedEnough(range_scan, last_scan))
+  if(last_scan != NULL)
+  {
+    return;
+  }
+
+  if(!mapper_->HasMovedEnough(range_scan, last_scan))
   {
     return;
   }
 
   // Find near vertices
   std::vector<karto::Vertex<karto::LocalizedRangeScan>*> near_linked_vertices;
-  near_linked_vertices = mapper->GetGraph()->FindNearLinkedVertices(range_scan,
-                                                                    mapper->getParamLoopSearchMaximumDistance());
+  near_linked_vertices = mapper_->GetGraph()->FindNearLinkedVertices(range_scan, search_max_distance_);
 
   // Convert vertices to scan
   std::vector<karto::LocalizedRangeScan*> near_linked_scan;
@@ -159,19 +163,25 @@ PointVectorDoubleWithIndex LifelongSlamToolbox::findRemovedGridPoint(
   LocalizedRangeScan* range_scan,
   std::vector<karto::LocalizedRangeScan*> near_linked_scan)
 /*****************************************************************************/
-{
-  karto::Mapper* mapper = smapper_->getMapper();
- 
+{ 
+  if(!lifelong_scan_matcher_)
+  {
+    lifelong_scan_matcher_ = ScanMatcher::Create(mapper_, mapper_->getParamCorrelationSearchSpaceDimension(),
+                                                  mapper_->getParamCorrelationSearchSpaceResolution(),
+                                                  mapper_->getParamCorrelationSearchSpaceSmearDeviation(), 
+                                                  scan_match_max_range_);     
+  }
+
   Pose2 best_pose;
   Matrix3 covariance;
   covariance.SetToIdentity();
 
-  kt_double response = mapper->GetSequentialScanMatcher()->MatchScan(range_scan, 
-                                                                      near_linked_scan,
-                                                                      best_pose, covariance, false,false); 
+  kt_double response = lifelong_scan_matcher_->MatchScan(range_scan, 
+                                                          near_linked_scan,
+                                                          best_pose, covariance, false,false); 
 
   PointVectorDoubleWithIndex occupied_grid_point;
-  occupied_grid_point = mapper->GetSequentialScanMatcher()->GetOccupiedGridPoint();
+  occupied_grid_point = lifelong_scan_matcher_->GetOccupiedGridPoint();
 
   PointVectorDoubleWithIndex point_readings = range_scan->GetPointReadings();
 
@@ -185,47 +195,15 @@ PointVectorDoubleWithIndex LifelongSlamToolbox::findRemovedGridPoint(
   for (int occupied_idx = 0; occupied_idx<occupied_grid_point.size(); occupied_idx++)
   {
     Vector2<kt_double> point_value = occupied_grid_point[occupied_idx].second;
-    int occupied_iter_num = checkValueExist(point_readings, point_value);
 
-    if(occupied_iter_num == -1)
+    auto iter = std::find_if(point_readings.begin(), point_readings.end(), CheckIsExist(point_value, match_radius_));
+    if(iter == point_readings.end()) // if not exist
     {
       removed_grid_point.push_back(occupied_grid_point[occupied_idx]);
     }
   }
 
   return removed_grid_point;
-}
-
-/*****************************************************************************/
-int LifelongSlamToolbox::checkValueExist(
-  PointVectorDoubleWithIndex point_vector, 
-  Vector2<kt_double> value)
-/*****************************************************************************/
-{
-  auto iter = std::find_if(point_vector.begin(), point_vector.end(),
-                                                            [&value](const std::pair<int,Vector2<kt_double>> &point_vector){
-
-                                                              kt_double diff_x = std::abs(point_vector.second.GetX() - value.GetX());
-                                                              kt_double diff_y = std::abs(point_vector.second.GetY() - value.GetY());
-
-                                                              if (diff_x < 0.1 && diff_y < 0.1)
-                                                              {
-                                                                return true;
-                                                              }
-                                                              else
-                                                              {
-                                                                return false;
-                                                              }
-
-                                                            });
-  if (iter == point_vector.end())
-  {
-    return -1;
-  }
-  else
-  {
-    return iter - point_vector.begin();
-  }
 }
 
 /*****************************************************************************/
@@ -242,10 +220,25 @@ void LifelongSlamToolbox::removeReadings(
 
   for (int removed_idx = 0; removed_idx < removed_grid_point.size(); removed_idx++)
   {
-    int reading_iter_num = checkValueExist(vertex_point_readings, removed_grid_point[removed_idx].second);
-    if (reading_iter_num != -1) // if exist
+
+    Vector2<kt_double> removed_point = removed_grid_point[removed_idx].second;
+    auto reading_iter = std::find_if(vertex_point_readings.begin(), 
+                                    vertex_point_readings.end(), 
+                                    CheckIsExist(removed_point, match_radius_));
+
+    if(reading_iter != vertex_point_readings.end())
     {
-      range_readings[vertex_point_readings[reading_iter_num].first] = -1;
+      range_readings[reading_iter->first] = -1;
+
+      // Searching near scan points
+      for(int check_index = 1; check_index < 10; check_index ++)
+      {
+        Vector2<kt_double> delta = (reading_iter + check_index)->second  - removed_point;
+        if(delta.Length() <= match_radius_)
+        {
+          range_readings[(reading_iter + check_index)->first] = -1;
+        }
+      }
     }
   }
 
@@ -262,10 +255,10 @@ void LifelongSlamToolbox::updateScansFromSlamGraph(
   Vertex<LocalizedRangeScan>* vertex)
 /*****************************************************************************/
 {
-  smapper_->getMapper()->GetMapperSensorManager()->EditScan(vertex->GetObject());
-  smapper_->getMapper()->GetMapperSensorManager()->EditRunningScans(vertex->GetObject());
+  mapper_->GetMapperSensorManager()->EditScan(vertex->GetObject());
+  mapper_->GetMapperSensorManager()->EditRunningScans(vertex->GetObject());
   dataset_->EditData(vertex->GetObject());
-  smapper_->getMapper()->GetGraph()->EditVertex(vertex->GetObject()->GetSensorName(), vertex);
+  mapper_->GetGraph()->EditVertex(vertex->GetObject()->GetSensorName(), vertex);
 
   return;
 }
@@ -275,33 +268,30 @@ void LifelongSlamToolbox::evaluateNodeDepreciation(
   LocalizedRangeScan* range_scan)
 /*****************************************************************************/
 {
-  if (range_scan)
+  boost::mutex::scoped_lock lock(smapper_mutex_);
+
+  const BoundingBox2& bb = range_scan->GetBoundingBox();
+  const Size2<double> bb_size = bb.GetSize();
+  double radius = sqrt(bb_size.GetWidth()*bb_size.GetWidth() +
+    bb_size.GetHeight()*bb_size.GetHeight()) / 2.0;
+  Vertices near_scan_vertices = FindScansWithinRadius(range_scan, radius);
+
+  ScoredVertices scored_verices =
+    computeScores(near_scan_vertices, range_scan);
+
+  ScoredVertices::iterator it;
+  for (it = scored_verices.begin(); it != scored_verices.end(); ++it)
   {
-    boost::mutex::scoped_lock lock(smapper_mutex_);
-
-    const BoundingBox2& bb = range_scan->GetBoundingBox();
-    const Size2<double> bb_size = bb.GetSize();
-    double radius = sqrt(bb_size.GetWidth()*bb_size.GetWidth() +
-      bb_size.GetHeight()*bb_size.GetHeight()) / 2.0;
-    Vertices near_scan_vertices = FindScansWithinRadius(range_scan, radius);
-
-    ScoredVertices scored_verices =
-      computeScores(near_scan_vertices, range_scan);
-
-    ScoredVertices::iterator it;
-    for (it = scored_verices.begin(); it != scored_verices.end(); ++it)
+    if(it->GetScore() < removal_score_)
     {
-      if (it->GetScore() < removal_score_)
-      {
-        ROS_INFO("Removing node %i from graph with score: %f and "
-          "old score: %f.", it->GetVertex()->GetObject()->GetUniqueId(),
-          it->GetScore(), it->GetVertex()->GetScore());
-        removeFromSlamGraph(it->GetVertex());
-      }
-      else
-      {
-        updateScoresSlamGraph(it->GetScore(), it->GetVertex());
-      }
+      ROS_INFO("Removing node %i from graph with score: %f and "
+        "old score: %f.", it->GetVertex()->GetObject()->GetUniqueId(),
+        it->GetScore(), it->GetVertex()->GetScore());
+      removeFromSlamGraph(it->GetVertex());
+    }
+    else
+    {
+      updateScoresSlamGraph(it->GetScore(), it->GetVertex());
     }
   }
 
@@ -318,16 +308,16 @@ Vertices LifelongSlamToolbox::FindScansWithinRadius(
   // access scans within radius that are connected with constraints to this
   // node.
 
-  if (use_tree_)
+  if(use_tree_)
   {
     return
-      smapper_->getMapper()->GetGraph()->FindNearByVertices(
+      mapper_->GetGraph()->FindNearByVertices(
       scan->GetSensorName(), scan->GetBarycenterPose(), radius);
   }
   else
   {
     return 
-      smapper_->getMapper()->GetGraph()->FindNearLinkedVertices(scan, radius);
+      mapper_->GetGraph()->FindNearLinkedVertices(scan, radius);
   }
 }
 
@@ -349,7 +339,7 @@ double LifelongSlamToolbox::computeObjectiveScore(
   // initial_score: Last score of this vertex before update
 
   // this is a really good fit and not from a loop closure, lets just decay
-  if (intersect_over_union > iou_match_ && num_constraints < 3)
+  if(intersect_over_union > iou_match_ && num_constraints < 3)
   {
     return -1.0;
   }
@@ -377,7 +367,7 @@ double LifelongSlamToolbox::computeObjectiveScore(
 
   //score += (initial_score - score) * candidate_scale_factor; 
   
-  if (score > 1.0)
+  if(score > 1.0)
   {
     ROS_ERROR("Objective function calculated for vertex score (%0.4f)"
       " greater than one! Thresholding to 1.0", score);
@@ -406,7 +396,7 @@ double LifelongSlamToolbox::computeScore(
   bool critical_lynchpoint = candidate_scan->GetUniqueId() == 0 ||
     candidate_scan->GetUniqueId() == 1;
   int id_diff = reference_scan->GetUniqueId() - candidate_scan->GetUniqueId();
-  if (id_diff < smapper_->getMapper()->getParamScanBufferSize() ||
+  if(id_diff < mapper_->getParamScanBufferSize() ||
     critical_lynchpoint)
   {
     return initial_score;
@@ -446,7 +436,7 @@ LifelongSlamToolbox::computeScores(
   {
     iou = computeIntersectOverUnion(range_scan,
       (*candidate_scan_it)->GetObject());
-    if (iou < iou_thresh_ || (*candidate_scan_it)->GetEdges().size() < 2)
+    if(iou < iou_thresh_ || (*candidate_scan_it)->GetEdges().size() < 2)
     {
       candidate_scan_it = near_scans.erase(candidate_scan_it);
     }
@@ -472,8 +462,8 @@ void LifelongSlamToolbox::removeFromSlamGraph(
   Vertex<LocalizedRangeScan>* vertex)
 /*****************************************************************************/
 {
-  smapper_->getMapper()->RemoveNodeFromGraph(vertex);
-  smapper_->getMapper()->GetMapperSensorManager()->RemoveScan(
+  mapper_->RemoveNodeFromGraph(vertex);
+  mapper_->GetMapperSensorManager()->RemoveScan(
     vertex->GetObject());
   dataset_->RemoveData(vertex->GetObject());
   vertex->RemoveObject();
@@ -497,7 +487,7 @@ bool LifelongSlamToolbox::deserializePoseGraphCallback(
   slam_toolbox_msgs::DeserializePoseGraph::Response& resp)
 /*****************************************************************************/
 {
-  if (req.match_type == procType::LOCALIZE_AT_POSE)
+  if(req.match_type == procType::LOCALIZE_AT_POSE)
   {
     ROS_ERROR("Requested a localization deserialization "
       "in non-localization mode.");
@@ -544,7 +534,7 @@ double LifelongSlamToolbox::computeIntersect(LocalizedRangeScan* s1,
   computeIntersectBounds(s1, s2, x_l, x_u, y_l, y_u);
   const double intersect = (y_u - y_l) * (x_u - x_l);
 
-  if (intersect < 0.0)
+  if(intersect < 0.0)
   {
     return 0.0;
   }
@@ -606,7 +596,7 @@ double LifelongSlamToolbox::computeReadingOverlapRatio(
   int inner_pts = 0;
   for (pt_it = pts.begin(); pt_it != pts.end(); ++pt_it)
   {
-    if (pt_it->second.GetX() < x_u && pt_it->second.GetX() > x_l &&
+    if(pt_it->second.GetX() < x_u && pt_it->second.GetX() > x_l &&
         pt_it->second.GetY() < y_u && pt_it->second.GetY() > y_l)
     {
       inner_pts++;
