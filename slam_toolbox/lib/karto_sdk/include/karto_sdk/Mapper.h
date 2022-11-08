@@ -748,6 +748,27 @@ namespace karto
 
   public:
     /**
+     * Gets the vertex associated with the given scan
+     * @param pScan
+     * @return vertex of scan
+     */
+    inline Vertex<LocalizedRangeScan>* GetVertex(LocalizedRangeScan* pScan)
+    {
+      Name rName = pScan->GetSensorName();
+      std::map<int, Vertex<LocalizedRangeScan>* >::iterator it = m_Vertices[rName].find(pScan->GetStateId());
+      if (it != m_Vertices[rName].end())
+      {
+        return it->second;
+      }
+      else
+      {
+        std::cout << "GetVertex: Failed to get vertex, idx " << pScan->GetStateId() << 
+          " is not in m_Vertices." << std::endl;
+        return nullptr;
+      }
+    }
+    
+    /**
      * Adds a vertex representing the given scan to the graph
      * @param pScan
      */
@@ -834,27 +855,6 @@ namespace karto
     void UpdateLoopScanMatcher(kt_double rangeThreshold);
 
   private:
-    /**
-     * Gets the vertex associated with the given scan
-     * @param pScan
-     * @return vertex of scan
-     */
-    inline Vertex<LocalizedRangeScan>* GetVertex(LocalizedRangeScan* pScan)
-    {
-      Name rName = pScan->GetSensorName();
-      std::map<int, Vertex<LocalizedRangeScan>* >::iterator it = m_Vertices[rName].find(pScan->GetStateId());
-      if (it != m_Vertices[rName].end())
-      {
-        return it->second;
-      }
-      else
-      {
-        std::cout << "GetVertex: Failed to get vertex, idx " << pScan->GetStateId() << 
-          " is not in m_Vertices." << std::endl;
-        return nullptr;
-      }
-    }
-
     /**
      * Finds the closest scan in the vector to the given pose
      * @param rScans
