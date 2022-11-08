@@ -102,30 +102,29 @@ void LifelongSlamToolbox::laserCallback(
   if(range_scan)
   {
     mapper_ = smapper_->getMapper();
-   
+
     if(partial_remove_)
     {
-      removeInvalidPointReadings(range_scan, last_scan_);
-      last_scan_ = mapper_->GetMapperSensorManager()->GetLastScan(range_scan->GetSensorName());      
+      partialGraphModification(range_scan, last_scan_);
     }
-    else
-    {
-      evaluateNodeDepreciation(range_scan);
-    }
+
+    evaluateNodeDepreciation(range_scan);
+
+    last_scan_ = mapper_->GetMapperSensorManager()->GetLastScan(range_scan->GetSensorName());     
   }
 
   return;
 }
 
 /*****************************************************************************/
-void LifelongSlamToolbox::removeInvalidPointReadings(
+void LifelongSlamToolbox::partialGraphModification(
   LocalizedRangeScan* range_scan,
   LocalizedRangeScan* last_scan)
 /*****************************************************************************/
 {
   boost::mutex::scoped_lock lock(smapper_mutex_);
 
-  if(last_scan != NULL)
+  if(last_scan == NULL)
   {
     return;
   }
@@ -136,23 +135,33 @@ void LifelongSlamToolbox::removeInvalidPointReadings(
   }
 
   // Find near vertices
-  std::vector<karto::Vertex<karto::LocalizedRangeScan>*> near_linked_vertices;
-  near_linked_vertices = mapper_->GetGraph()->FindNearLinkedVertices(range_scan, search_max_distance_);
-
-  // Convert vertices to scan
-  std::vector<karto::LocalizedRangeScan*> near_linked_scan;
-  for (int vertex_idx = 0; vertex_idx < near_linked_vertices.size(); vertex_idx++)
-  {
-    near_linked_scan.push_back(near_linked_vertices[vertex_idx]->GetObject());
-  }
+  LocalizedRangeScanVector near_linked_scans;
+  near_linked_scans = mapper_->GetGraph()->FindNearLinkedScans(range_scan, search_max_distance_);
 
   // Get removed grid point
-  PointVectorDoubleWithIndex removed_grid_point = findRemovedGridPoint(range_scan, near_linked_scan);
+  PointVectorDoubleWithIndex removed_grid_point = findRemovedGridPoint(range_scan, near_linked_scans);
 
-  for (int vertex_idx = 0; vertex_idx < near_linked_vertices.size(); vertex_idx++)
+  // Update scans & vertices
+  LocalizedRangeScanVector::iterator near_scan_it;
+  for (near_scan_it = near_linked_scans.begin(); near_scan_it != near_linked_scans.end(); ++near_scan_it)
   {
-    removeReadings(near_linked_vertices[vertex_idx], removed_grid_point);   
-    updateScansFromSlamGraph(near_linked_vertices[vertex_idx]);
+    LocalizedRangeScan* near_scan = *near_scan_it;
+    Vertex<LocalizedRangeScan>* near_vertex = mapper_->GetGraph()->GetVertex(near_scan);
+
+    if(near_vertex == nullptr || near_scan == nullptr || range_scan == *near_scan_it)
+    {
+      continue;
+    }
+
+    if (near_scan->GetPointReadings(true).size() == 0)
+    {
+      removeFromSlamGraph(near_vertex); // remove invalid vertices
+    }
+    else
+    {
+      removeInvalidReadings(near_vertex, removed_grid_point);   
+      updateScansFromSlamGraph(near_vertex);
+    }
   }
 
   return;
@@ -207,7 +216,7 @@ PointVectorDoubleWithIndex LifelongSlamToolbox::findRemovedGridPoint(
 }
 
 /*****************************************************************************/
-void LifelongSlamToolbox::removeReadings(
+void LifelongSlamToolbox::removeInvalidReadings(
   Vertex<LocalizedRangeScan>* vertex,
   PointVectorDoubleWithIndex removed_grid_point)
 /*****************************************************************************/

@@ -62,9 +62,9 @@ protected:
     slam_toolbox_msgs::DeserializePoseGraph::Request& req,
     slam_toolbox_msgs::DeserializePoseGraph::Response& resp) override final;
 
-  void removeInvalidPointReadings(LocalizedRangeScan* range_scan, LocalizedRangeScan* last_scan);
+  void partialGraphModification(LocalizedRangeScan* range_scan, LocalizedRangeScan* last_scan);
   PointVectorDoubleWithIndex findRemovedGridPoint(LocalizedRangeScan* range_scan, std::vector<karto::LocalizedRangeScan*> near_linked_scan);
-  void removeReadings(Vertex<LocalizedRangeScan>* vertex, PointVectorDoubleWithIndex removed_grid_point);
+  void removeInvalidReadings(Vertex<LocalizedRangeScan>* vertex, PointVectorDoubleWithIndex removed_grid_point);
   void updateScansFromSlamGraph(Vertex<LocalizedRangeScan>* vertex);
 
   void evaluateNodeDepreciation(LocalizedRangeScan* range_scan);
