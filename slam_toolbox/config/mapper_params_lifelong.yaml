@@ -15,8 +15,8 @@ mode: mapping
 
 # lifelong params
 lifelong_partial_remove: true
-lifelong_search_maximum_distance: 20.0
-lifelong_scan_match_maximum_range: 10.0
+lifelong_search_maximum_distance: 20.0 # about max_laser_range
+lifelong_scan_match_maximum_range: 10.0 
 lifelong_match_radius: 0.1
 lifelong_search_use_tree: false
 lifelong_minimum_score: 0.1
