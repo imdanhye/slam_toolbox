@@ -20,6 +20,7 @@
 #define SLAM_TOOLBOX_SLAM_TOOLBOX_LIFELONG_H_
 
 #include "slam_toolbox/slam_toolbox_common.hpp"
+#include "std_srvs/SetBool.h"
 
 namespace slam_toolbox
 {
@@ -75,6 +76,9 @@ protected:
   void updateScoresSlamGraph(const double& score, Vertex<LocalizedRangeScan>* vertex);
   void checkIsNotNormalized(const double& value);
 
+  void publishRemovedGraph();
+  bool debugModeCallback(std_srvs::SetBool::Request& req, std_srvs::SetBool::Response& res);
+
   bool use_tree_;
   double iou_thresh_;
   double removal_score_;
@@ -92,6 +96,12 @@ protected:
   double search_max_distance_;
   double scan_match_max_range_;
   double match_radius_;
+
+  bool debug_mode_;
+  ros::ServiceServer ssDebug_;
+  ros::Publisher removed_node_pub_;
+  visualization_msgs::MarkerArray removed_array_;
+
 };
 
 }

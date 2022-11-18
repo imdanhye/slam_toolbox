@@ -40,6 +40,7 @@ LifelongSlamToolbox::LifelongSlamToolbox(ros::NodeHandle& nh)
 /*****************************************************************************/
 {
   loadPoseGraphByParams(nh);
+  nh.param("lifelong_debug_mode", debug_mode_, true);
   nh.param("lifelong_partial_remove", partial_remove_, true);
   nh.param("lifelong_search_maximum_distance", search_max_distance_,20.0);
   nh.param("lifelong_scan_match_maximum_range",scan_match_max_range_, 10.0);
@@ -68,6 +69,13 @@ LifelongSlamToolbox::LifelongSlamToolbox(ros::NodeHandle& nh)
 
   // in lifelong mode, we cannot have interactive mode enabled
   enable_interactive_mode_ = false;
+
+  // add publisher to check removed vertices
+  removed_node_pub_ = nh.advertise<visualization_msgs::MarkerArray>("karto_removed_graph_visualization",1);
+  threads_.push_back(std::make_unique<boost::thread>(
+    boost::bind(&LifelongSlamToolbox::publishRemovedGraph, this)));
+
+  ssDebug_ = nh.advertiseService("lifelong_debug_mode", &LifelongSlamToolbox::debugModeCallback, this);
 }
 
 /*****************************************************************************/
@@ -471,6 +479,18 @@ void LifelongSlamToolbox::removeFromSlamGraph(
   Vertex<LocalizedRangeScan>* vertex)
 /*****************************************************************************/
 {
+   // publish removed vertex
+  if(debug_mode_)
+  {
+    std::unordered_map<int, Eigen::Vector3d>* graph = mapper_->getScanSolver()->getGraph();
+    GraphIterator graphit = graph->find(vertex->GetObject()->GetUniqueId());
+    visualization_msgs::Marker m = vis_utils::toMarker(map_frame_, "slam_toolbox", 0.1, {0.0, 1.0, 0.0});
+    m.id = graphit->second(0);
+    m.pose.position.x = graphit->second(0);
+    m.pose.position.y = graphit->second(1);
+    removed_array_.markers.push_back(m);   
+  }
+
   mapper_->RemoveNodeFromGraph(vertex);
   mapper_->GetMapperSensorManager()->RemoveScan(
     vertex->GetObject());
@@ -613,6 +633,52 @@ double LifelongSlamToolbox::computeReadingOverlapRatio(
   }
 
   return double(inner_pts) / double(num_pts);
+}
+
+/*****************************************************************************/
+void LifelongSlamToolbox::publishRemovedGraph()
+/*****************************************************************************/
+{
+    double map_update_interval;
+    if(!nh_.getParam("map_update_interval", map_update_interval))
+    {
+      map_update_interval = 10.0;
+    }
+
+    ros::Rate r(1.0/map_update_interval);
+    while(ros::ok())
+    {
+      if(debug_mode_)
+      {
+        removed_node_pub_.publish(removed_array_);
+      }
+
+      r.sleep();
+    }
+
+  return;
+}
+
+/*****************************************************************************/
+bool LifelongSlamToolbox::debugModeCallback(
+  std_srvs::SetBool::Request& req,
+  std_srvs::SetBool::Response& res)
+/*****************************************************************************/
+{
+  if(req.data)
+  {
+    debug_mode_ = true;
+    res.success = true;
+    res.message = "Start to publish topic 'karto_removed_graph_visualization'";
+  }
+  else
+  {
+    debug_mode_ = false;
+    res.success = true;
+    res.message = "Finish to publish topic 'karto_removed_graph_visualization'";
+  }
+
+  return true;
 }
 
 } // end namespace
