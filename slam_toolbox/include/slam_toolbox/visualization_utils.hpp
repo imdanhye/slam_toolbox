@@ -25,7 +25,8 @@ namespace vis_utils
 inline visualization_msgs::Marker toMarker(
   const std::string& frame,
   const std::string& ns,
-  const double& scale)
+  const double& scale,
+  const std::vector<double> color)
 {
   visualization_msgs::Marker marker;
 
@@ -38,9 +39,9 @@ inline visualization_msgs::Marker toMarker(
   marker.scale.x = scale;
   marker.scale.y = scale;
   marker.scale.z = scale;
-  marker.color.r = 1.0;
-  marker.color.g = 0;
-  marker.color.b = 0.0;
+  marker.color.r = color[0];
+  marker.color.g = color[1];
+  marker.color.b = color[2];
   marker.color.a = 1.;
   marker.action = visualization_msgs::Marker::ADD;
   marker.lifetime = ros::Duration(0.);

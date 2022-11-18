@@ -141,7 +141,7 @@ void LoopClosureAssistant::publishGraph()
 
   visualization_msgs::MarkerArray marray;
   visualization_msgs::Marker m = vis_utils::toMarker(map_frame_,
-    "slam_toolbox", 0.1);
+    "slam_toolbox", 0.1, {1.0, 0.0, 0.0});
 
   for (ConstGraphIterator it = graph->begin(); it != graph->end(); ++it)
   {
