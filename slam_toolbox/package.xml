@@ -65,6 +65,7 @@
   <exec_depend>libqt5-core</exec_depend>
   <exec_depend>libqt5-widgets</exec_depend>
   <exec_depend>map_server</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
 
   <depend>rostest</depend>
 

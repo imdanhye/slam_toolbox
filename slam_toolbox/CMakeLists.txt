@@ -30,6 +30,7 @@ find_package(catkin REQUIRED
     rviz
     map_server
     slam_toolbox_msgs
+    std_srvs
 )
 
 find_package(PkgConfig REQUIRED)
@@ -80,6 +81,7 @@ catkin_package(
       tf2_geometry_msgs
       interactive_markers
       slam_toolbox_msgs
+      std_srvs
     DEPENDS
       EIGEN3
       Boost
