@@ -213,11 +213,19 @@ PointVectorDoubleWithIndex LifelongSlamToolbox::findRemovedGridPoint(
   {
     Vector2<kt_double> point_value = occupied_grid_point[occupied_idx].second;
 
-    // Except points that are farther than current scan point
     Pose2 scan_pose = range_scan->GetSensorPose();
 
-    kt_double point_angle = atan2(point_value.GetY()-scan_pose.GetY(), point_value.GetX()-scan_pose.GetX());
     kt_double scan_start_angle = scan_pose.GetHeading() + range_scan->GetLaserRangeFinder()->GetMinimumAngle();
+    kt_double scan_end_angle = scan_pose.GetHeading() + range_scan->GetLaserRangeFinder()->GetMaximumAngle();
+    kt_double point_angle = atan2(point_value.GetY()-scan_pose.GetY(), point_value.GetX()-scan_pose.GetX());
+
+    // Excluding points outside the scan measurement range
+    if(point_angle < scan_start_angle || point_angle > scan_end_angle)
+    {
+      continue;
+    }
+
+    // Excluding points that are farther than current scan point
     kt_double angle_diff = math::NormalizeAngle(point_angle - scan_start_angle);
 
     if(angle_diff < 0)
@@ -237,7 +245,6 @@ PointVectorDoubleWithIndex LifelongSlamToolbox::findRemovedGridPoint(
         continue;
       }
     }
-
     if(is_filtered)
     {
       continue;
