@@ -186,27 +186,50 @@ PointVectorDoubleWithIndex LifelongSlamToolbox::findRemovedGridPoint(
     lifelong_scan_matcher_ = ScanMatcher::Create(mapper_, mapper_->getParamCorrelationSearchSpaceDimension(),
                                                   mapper_->getParamCorrelationSearchSpaceResolution(),
                                                   mapper_->getParamCorrelationSearchSpaceSmearDeviation(), 
-                                                  scan_match_max_range_);     
+                                                  scan_match_max_range_);
   }
 
-  Pose2 best_pose;
-  Matrix3 covariance;
-  covariance.SetToIdentity();
+  // Set offset
+  CorrelationGrid* correlation_grid = lifelong_scan_matcher_->GetCorrelationGrid();
+  Rectangle2<kt_int32s> roi = correlation_grid->GetROI();
 
-  kt_double response = lifelong_scan_matcher_->MatchScan(range_scan, 
-                                                          near_linked_scan,
-                                                          best_pose, covariance, false,false); 
+  Vector2<kt_double> offset;
+  Pose2 scan_pose = range_scan->GetSensorPose();
+  offset.SetX(scan_pose.GetX() - (0.5 * (roi.GetWidth() - 1) * correlation_grid->GetResolution()));
+  offset.SetY(scan_pose.GetY() - (0.5 * (roi.GetHeight() - 1) * correlation_grid->GetResolution()));
 
+  correlation_grid->GetCoordinateConverter()->SetOffset(offset); 
+
+  // Get occupied grid points
   PointVectorDoubleWithIndex occupied_grid_point;
-  occupied_grid_point = lifelong_scan_matcher_->GetOccupiedGridPoint();
-
-  PointVectorDoubleWithIndex point_readings = range_scan->GetPointReadings();
-
   PointVectorDoubleWithIndex removed_grid_point;
 
-  // Update sensor pose & point readings
-  range_scan->SetSensorPose(best_pose);
-  range_scan->UpdateReadings();
+  for (int scan_idx = 0; scan_idx<near_linked_scan.size(); scan_idx++)
+  {
+    PointVectorDoubleWithIndex valid_points = lifelong_scan_matcher_->FindValidPoints(near_linked_scan[scan_idx], 
+                                                                                      scan_pose.GetPosition());
+    for (int point_idx = 0; point_idx<valid_points.size(); point_idx++)
+    {
+      Vector2<kt_int32s> grid_point = correlation_grid->WorldToGrid(valid_points[point_idx].second);
+      if (!math::IsUpTo(grid_point.GetX(), roi.GetWidth()) ||
+          !math::IsUpTo(grid_point.GetY(), roi.GetHeight()))
+      {
+        continue;
+      }
+
+      int gird_index = correlation_grid->GridIndex(grid_point);
+
+      if (correlation_grid->GetDataPointer()[gird_index] == GridStates_Occupied)
+      {
+        continue;
+      }
+
+      occupied_grid_point.push_back(std::pair<int,Vector2<kt_double>>(valid_points[point_idx].first, valid_points[point_idx].second));
+      correlation_grid->GetDataPointer()[gird_index] = GridStates_Occupied;
+
+      correlation_grid->SmearPoint(grid_point);
+    }
+  }
 
   // Find removed grid point
   for (int occupied_idx = 0; occupied_idx<occupied_grid_point.size(); occupied_idx++)
@@ -251,6 +274,8 @@ PointVectorDoubleWithIndex LifelongSlamToolbox::findRemovedGridPoint(
     }
 
     // Check that point exists
+    PointVectorDoubleWithIndex point_readings = range_scan->GetPointReadings();
+
     auto iter = std::find_if(point_readings.begin(), point_readings.end(), CheckIsExist(point_value, match_radius_));
     if(iter == point_readings.end()) // if not exist
     {

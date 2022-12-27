@@ -1442,11 +1442,14 @@ namespace karto
       return m_pCorrelationGrid;
     }
 
-    inline PointVectorDoubleWithIndex GetOccupiedGridPoint() const
-    {
-      return m_OccupiedGridPoint;
-    }
-    
+    /**
+     * Compute which points in a scan are on the same side as the given viewpoint
+     * @param pScan
+     * @param rViewPoint
+     * @return points on the same side
+     */
+    PointVectorDoubleWithIndex FindValidPoints(LocalizedRangeScan* pScan, const Vector2<kt_double>& rViewPoint) const;
+
   private:
     /**
      * Marks cells where scans' points hit as being occupied
@@ -1463,14 +1466,6 @@ namespace karto
      * @param doSmear whether the points will be smeared
      */
     void AddScan(LocalizedRangeScan* pScan, const Vector2<kt_double>& rViewPoint, kt_bool doSmear = true);
-
-    /**
-     * Compute which points in a scan are on the same side as the given viewpoint
-     * @param pScan
-     * @param rViewPoint
-     * @return points on the same side
-     */
-    PointVectorDoubleWithIndex FindValidPoints(LocalizedRangeScan* pScan, const Vector2<kt_double>& rViewPoint) const;
 
     /**
      * Get response at given position for given rotation (only look up valid points)
@@ -1507,7 +1502,6 @@ namespace karto
     kt_int32u m_nAngles;
     kt_double m_searchAngleResolution;
     kt_bool m_doPenalize;
-    PointVectorDoubleWithIndex m_OccupiedGridPoint;
 
     /**
      * Serialization: class ScanMatcher
