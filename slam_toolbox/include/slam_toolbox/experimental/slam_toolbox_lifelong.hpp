@@ -93,6 +93,8 @@ protected:
   ScanMatcher* lifelong_scan_matcher_;
 
   bool partial_remove_;
+  int node_buffer_size_;
+  double node_maximum_distance_;
   double search_max_distance_;
   double scan_match_max_range_;
   double match_radius_;

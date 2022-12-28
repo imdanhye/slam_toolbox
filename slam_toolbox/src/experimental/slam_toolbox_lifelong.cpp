@@ -44,6 +44,8 @@ LifelongSlamToolbox::LifelongSlamToolbox(ros::NodeHandle& nh)
   nh.param("lifelong_partial_remove", partial_remove_, true);
   nh.param("lifelong_search_maximum_distance", search_max_distance_,20.0);
   nh.param("lifelong_scan_match_maximum_range",scan_match_max_range_, 10.0);
+  nh.param("lifelong_node_buffer_size",node_buffer_size_, 10);
+  nh.param("lifelong_node_maximum_distance",node_maximum_distance_, 5.0);
   nh.param("lifelong_match_radius", match_radius_, 0.1);
   nh.param("lifelong_search_use_tree", use_tree_, false);
   nh.param("lifelong_minimum_score", iou_thresh_, 0.10);
@@ -111,12 +113,12 @@ void LifelongSlamToolbox::laserCallback(
   {
     mapper_ = smapper_->getMapper();
 
+    evaluateNodeDepreciation(range_scan);
+
     if(partial_remove_)
     {
       partialGraphModification(range_scan, last_scan_);
     }
-
-    evaluateNodeDepreciation(range_scan);
 
     last_scan_ = mapper_->GetMapperSensorManager()->GetLastScan(range_scan->GetSensorName());     
   }
@@ -142,18 +144,43 @@ void LifelongSlamToolbox::partialGraphModification(
     return;
   }
 
-  // Find near vertices
-  LocalizedRangeScanVector near_linked_scans;
-  near_linked_scans = mapper_->GetGraph()->FindNearLinkedScans(range_scan, search_max_distance_);
+  LocalizedRangeScanVector near_linked_scans, near_linked_scans_tmp;
+  LocalizedRangeScanVector::iterator near_scan_it;
+
+  // Fine near scans
+  // near_linked_scans = mapper_->GetGraph()->FindNearLinkedScans(range_scan, search_max_distance_);
+  near_linked_scans = mapper_->GetGraph()->FindNearByScans( range_scan->GetSensorName(), 
+                                                            range_scan->GetSensorPose(), search_max_distance_);
+  near_linked_scans_tmp = near_linked_scans;
+
+  // Check if it is a previously visited vertex or out of bound
+  for (near_scan_it = near_linked_scans_tmp.begin(); near_scan_it != near_linked_scans_tmp.end();)  
+  {
+    LocalizedRangeScan* near_scan = *near_scan_it;
+    if( range_scan->GetUniqueId() - near_scan->GetUniqueId() < node_buffer_size_ ||
+        (range_scan->GetSensorPose().GetPosition() - near_scan->GetSensorPose().GetPosition()).Length() > node_maximum_distance_)
+    {
+      near_scan_it = near_linked_scans_tmp.erase(near_scan_it);
+    }
+    else
+    {
+      near_scan_it++;
+    }
+  }
+
+  if(!near_linked_scans_tmp.size())
+  {
+    return;
+  }
 
   // Get removed grid point
   PointVectorDoubleWithIndex removed_grid_point = findRemovedGridPoint(range_scan, near_linked_scans);
 
   // Update scans & vertices
-  LocalizedRangeScanVector::iterator near_scan_it;
   for (near_scan_it = near_linked_scans.begin(); near_scan_it != near_linked_scans.end(); ++near_scan_it)
   {
     LocalizedRangeScan* near_scan = *near_scan_it;
+
     Vertex<LocalizedRangeScan>* near_vertex = mapper_->GetGraph()->GetVertex(near_scan);
 
     if(near_vertex == nullptr || near_scan == nullptr || range_scan == *near_scan_it)
@@ -368,6 +395,7 @@ void LifelongSlamToolbox::evaluateNodeDepreciation(
         "old score: %f.", it->GetVertex()->GetObject()->GetUniqueId(),
         it->GetScore(), it->GetVertex()->GetScore());
       removeFromSlamGraph(it->GetVertex());
+
     }
     else
     {
