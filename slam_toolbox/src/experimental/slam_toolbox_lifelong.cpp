@@ -35,7 +35,6 @@ void LifelongSlamToolbox::checkIsNotNormalized(const double& value)
 /*****************************************************************************/
 LifelongSlamToolbox::LifelongSlamToolbox(ros::NodeHandle& nh)
 : SlamToolbox(nh),
-  last_scan_(NULL),
   lifelong_scan_matcher_(NULL)
 /*****************************************************************************/
 {
@@ -117,10 +116,9 @@ void LifelongSlamToolbox::laserCallback(
 
     if(partial_remove_)
     {
-      partialGraphModification(range_scan, last_scan_);
+      partialGraphModification(range_scan);
     }
 
-    last_scan_ = mapper_->GetMapperSensorManager()->GetLastScan(range_scan->GetSensorName());     
   }
 
   return;
@@ -128,21 +126,10 @@ void LifelongSlamToolbox::laserCallback(
 
 /*****************************************************************************/
 void LifelongSlamToolbox::partialGraphModification(
-  LocalizedRangeScan* range_scan,
-  LocalizedRangeScan* last_scan)
+  LocalizedRangeScan* range_scan)
 /*****************************************************************************/
 {
   boost::mutex::scoped_lock lock(smapper_mutex_);
-
-  if(last_scan == NULL)
-  {
-    return;
-  }
-
-  if(!mapper_->HasMovedEnough(range_scan, last_scan))
-  {
-    return;
-  }
 
   LocalizedRangeScanVector near_linked_scans, near_linked_scans_tmp;
   LocalizedRangeScanVector::iterator near_scan_it;

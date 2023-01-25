@@ -63,7 +63,7 @@ protected:
     slam_toolbox_msgs::DeserializePoseGraph::Request& req,
     slam_toolbox_msgs::DeserializePoseGraph::Response& resp) override final;
 
-  void partialGraphModification(LocalizedRangeScan* range_scan, LocalizedRangeScan* last_scan);
+  void partialGraphModification(LocalizedRangeScan* range_scan);
   PointVectorDoubleWithIndex findRemovedGridPoint(LocalizedRangeScan* range_scan, std::vector<karto::LocalizedRangeScan*> near_linked_scan);
   void removeInvalidReadings(Vertex<LocalizedRangeScan>* vertex, PointVectorDoubleWithIndex removed_grid_point);
   void updateScansFromSlamGraph(Vertex<LocalizedRangeScan>* vertex);
@@ -88,7 +88,6 @@ protected:
   double iou_match_;
   double nearby_penalty_;
 
-  LocalizedRangeScan* last_scan_;
   karto::Mapper* mapper_;
   ScanMatcher* lifelong_scan_matcher_;
 
